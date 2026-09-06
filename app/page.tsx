@@ -42,9 +42,10 @@ import {
 } from '@/lib/strategy';
 
 const STARTING_BALANCE = 10_000;
+const CNY_PER_USDT = 7.1;
 const SPOT_TAKER_FEE = 0.001;
 const PERP_TAKER_FEE = 0.0005;
-const STORAGE_KEY = 'eth-score-paper-v3';
+const STORAGE_KEY = 'eth-score-paper-v4';
 const CARRY_ENTRY_TS = Date.UTC(2026, 7, 17);
 const CARRY_ENTRY_PRICE = 1843.69;
 
@@ -76,16 +77,16 @@ type Account = {
 };
 type OkxResponse<T> = { code: string; msg?: string; data: T };
 
-const entryNotional = STARTING_BALANCE / (1 + SPOT_TAKER_FEE);
+const entryNotionalCny = STARTING_BALANCE / (1 + SPOT_TAKER_FEE);
 const cleanAccount: Account = {
   startedAt: CARRY_ENTRY_TS,
   balance: 0,
   position: {
     side: 'long',
     entry: CARRY_ENTRY_PRICE,
-    quantity: entryNotional / CARRY_ENTRY_PRICE,
+    quantity: entryNotionalCny / CNY_PER_USDT / CARRY_ENTRY_PRICE,
     margin: STARTING_BALANCE,
-    entryFee: entryNotional * SPOT_TAKER_FEE,
+    entryFee: entryNotionalCny * SPOT_TAKER_FEE,
     openedAt: CARRY_ENTRY_TS,
   },
   trades: [],
@@ -129,16 +130,18 @@ function markEquity(account: Account, price: number) {
   if (!p) return account.balance;
   const pnl =
     p.side === 'long'
-      ? p.quantity * price
-      : p.margin - p.entryFee + p.quantity * (p.entry - price);
-  return p.side === 'long' ? p.quantity * price : pnl;
+      ? p.quantity * price * CNY_PER_USDT
+      : p.margin -
+        p.entryFee +
+        p.quantity * (p.entry - price) * CNY_PER_USDT;
+  return p.side === 'long' ? p.quantity * price * CNY_PER_USDT : pnl;
 }
 
 function executePoint(account: Account, point: SignalPoint): Account {
   const next = { ...account, trades: [...account.trades] };
   const signal = getSignalLabel(point, account.position?.side ?? 'flat');
   if (account.position?.side === 'long' && signal.action === '平多') {
-    const gross = account.position.quantity * point.close;
+    const gross = account.position.quantity * point.close * CNY_PER_USDT;
     const exitFee = gross * SPOT_TAKER_FEE;
     const final = gross - exitFee;
     const totalFee = account.position.entryFee + exitFee;
@@ -157,9 +160,15 @@ function executePoint(account: Account, point: SignalPoint): Account {
     });
     next.position = null;
   } else if (account.position?.side === 'short' && signal.action === '平空') {
-    const exitFee = account.position.quantity * point.close * PERP_TAKER_FEE;
+    const exitFee =
+      account.position.quantity *
+      point.close *
+      CNY_PER_USDT *
+      PERP_TAKER_FEE;
     const pnl =
-      account.position.quantity * (account.position.entry - point.close) -
+      account.position.quantity *
+        (account.position.entry - point.close) *
+        CNY_PER_USDT -
       account.position.entryFee -
       exitFee;
     next.balance = account.position.margin + pnl;
@@ -176,13 +185,13 @@ function executePoint(account: Account, point: SignalPoint): Account {
     });
     next.position = null;
   } else if (!account.position && signal.action === '开多') {
-    const notional = account.balance / (1 + SPOT_TAKER_FEE);
+    const notionalCny = account.balance / (1 + SPOT_TAKER_FEE);
     next.position = {
       side: 'long',
       entry: point.close,
-      quantity: notional / point.close,
+      quantity: notionalCny / CNY_PER_USDT / point.close,
       margin: account.balance,
-      entryFee: notional * SPOT_TAKER_FEE,
+      entryFee: notionalCny * SPOT_TAKER_FEE,
       openedAt: point.ts,
     };
     next.balance = 0;
@@ -190,7 +199,7 @@ function executePoint(account: Account, point: SignalPoint): Account {
     next.position = {
       side: 'short',
       entry: point.close,
-      quantity: account.balance / point.close,
+      quantity: account.balance / CNY_PER_USDT / point.close,
       margin: account.balance,
       entryFee: account.balance * PERP_TAKER_FEE,
       openedAt: point.ts,
@@ -439,8 +448,8 @@ export default function Home() {
                     恢复到 8 月 17 日的持仓起点？
                   </AlertDialogTitle>
                   <AlertDialogDescription>
-                    账户将恢复为 10,000 U，并按 1,843.69
-                    的入场价重新建立现货多单；已有模拟交易记录会清空。
+                    账户将恢复为 10,000 CNY，并按 1,843.69 U
+                    的入场价重新建立等值现货多单；已有模拟交易记录会清空。
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -463,7 +472,7 @@ export default function Home() {
           <Metric
             icon={<WalletCards />}
             label="账户权益"
-            value={`${money.format(equity)} U`}
+            value={`${money.format(equity)} CNY`}
             note={`累计 ${(equity / STARTING_BALANCE - 1) * 100 >= 0 ? '+' : ''}${((equity / STARTING_BALANCE - 1) * 100).toFixed(2)}%`}
           />
           <Metric
@@ -514,7 +523,7 @@ export default function Home() {
           <Metric
             icon={<ShieldCheck />}
             label="浮动盈亏"
-            value={`${unrealized >= 0 ? '+' : ''}${money.format(unrealized)} U`}
+            value={`${unrealized >= 0 ? '+' : ''}${money.format(unrealized)} CNY`}
             note={
               account.position
                 ? `${unrealized >= 0 ? '+' : ''}${((unrealized / account.position.margin) * 100).toFixed(2)}%`
@@ -668,8 +677,8 @@ export default function Home() {
                     <TableHead>开仓</TableHead>
                     <TableHead>平仓</TableHead>
                     <TableHead>持仓</TableHead>
-                    <TableHead className="text-right">手续费</TableHead>
-                    <TableHead className="text-right">净盈亏</TableHead>
+                    <TableHead className="text-right">手续费 (CNY)</TableHead>
+                    <TableHead className="text-right">净盈亏 (CNY)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -803,8 +812,8 @@ export default function Home() {
           </div>
         </section>
         <p className="pb-3 text-center text-xs leading-5 text-muted-foreground">
-          模拟盘以 2026-08-17 的回测持仓为起点：10,000 U，现货多单入场价
-          1,843.69。仅在本机浏览器记账，不连接交易账户；页面关闭期间会在下次打开时补算完整日K。
+          模拟盘以 2026-08-17 的回测持仓为起点：10,000 CNY，按固定汇率 1 U =
+          7.10 CNY 换算，并以 1,843.69 U 的价格买入等值 ETH。仅在本机浏览器记账，不连接交易账户；页面关闭期间会在下次打开时补算完整日K。
         </p>
       </div>
     </main>
