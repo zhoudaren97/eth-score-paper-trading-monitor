@@ -44,9 +44,9 @@ import {
 const STARTING_BALANCE = 10_000;
 const SPOT_TAKER_FEE = 0.001;
 const PERP_TAKER_FEE = 0.0005;
-const STORAGE_KEY = 'eth-score-paper-v2';
+const STORAGE_KEY = 'eth-score-paper-v3';
 const CARRY_ENTRY_TS = Date.UTC(2026, 7, 17);
-const CARRY_ENTRY_PRICE = 1917.79;
+const CARRY_ENTRY_PRICE = 1843.69;
 
 type Position = {
   side: 'long' | 'short';
@@ -439,7 +439,7 @@ export default function Home() {
                     恢复到 8 月 17 日的持仓起点？
                   </AlertDialogTitle>
                   <AlertDialogDescription>
-                    账户将恢复为 10,000 U，并按 1,917.79
+                    账户将恢复为 10,000 U，并按 1,843.69
                     的入场价重新建立现货多单；已有模拟交易记录会清空。
                   </AlertDialogDescription>
                 </AlertDialogHeader>
@@ -804,7 +804,7 @@ export default function Home() {
         </section>
         <p className="pb-3 text-center text-xs leading-5 text-muted-foreground">
           模拟盘以 2026-08-17 的回测持仓为起点：10,000 U，现货多单入场价
-          1,917.79。仅在本机浏览器记账，不连接交易账户；页面关闭期间会在下次打开时补算完整日K。
+          1,843.69。仅在本机浏览器记账，不连接交易账户；页面关闭期间会在下次打开时补算完整日K。
         </p>
       </div>
     </main>
